@@ -36,3 +36,31 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+# ===============================
+# Фикс для Render (чтобы он думал, что бот "открывает порт")
+# ===============================
+from aiohttp import web
+import asyncio
+
+async def handle(request):
+    return web.Response(text="Bot is running!")
+
+async def web_server():
+    app = web.Application()
+    app.add_routes([web.get("/", handle)])
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    await site.start()
+
+async def main():
+    bot_task = asyncio.create_task(dp.start_polling(bot))
+    web_task = asyncio.create_task(web_server())
+    await asyncio.gather(bot_task, web_task)
+
+if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logging.info("🚀 Запуск бота с веб-сервером...")
+    asyncio.run(main())
