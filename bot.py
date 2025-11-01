@@ -4,13 +4,12 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiohttp import web
 
-# Настройки
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SERVICE_URL = os.getenv("SERVICE_URL")
-PHOTOGRAPHER_ID = 8258768183  # ID куда будут отправляться заявки (замени на свой chat_id, если нужно)
+PHOTOGRAPHER_ID = 1054983240  # ID куда будут отправляться заявки (замени на свой chat_id)
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot)
+dp = Dispatcher()  # <--- исправлено
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
