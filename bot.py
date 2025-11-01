@@ -1,7 +1,6 @@
 # bot.py — webhook-ready для Render
 import os
 import logging
-import asyncio
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -46,8 +45,8 @@ async def start_command(message: types.Message):
         await message.answer(
             f"Привет, {name}! 👋\n"
             "Меня зовут Юля — я помощник фотографа 🌿.\n"
-            "Выберите пункт ниже 👇"
-            "\nЕсли у вас есть вопрос, которого нет в меню, напишите его, и я передам фотографу.",
+            "Выберите пункт ниже 👇\n"
+            "Если у вас есть вопрос, которого нет в меню, напишите его, и я передам фотографу.",
             reply_markup=main_menu()
         )
     else:
@@ -61,7 +60,6 @@ async def start_command(message: types.Message):
 async def generic_handler(message: types.Message):
     text = (message.text or "").lower()
     name = message.from_user.first_name or "друг"
-    user_id = message.from_user.id
 
     # --- Цены ---
     if "💰" in text or "цена" in text or "узнать цены" in text:
@@ -74,7 +72,7 @@ async def generic_handler(message: types.Message):
             "• Мероприятия: от 200 BYN/час\n"
             "• Свадьбы: час — 150 BYN, день — 350 BYN, полдня — 200 BYN\n"
             "• Только прогулка — 100 BYN\n"
-            "• Только ЗАГС — 80 BYN\n"
+            "• Только ЗАГС — 80 BYN"
         )
         await message.answer(prices_text, reply_markup=main_menu())
         return
@@ -88,7 +86,7 @@ async def generic_handler(message: types.Message):
             "• Детская — яркие и живые моменты\n"
             "• Love Story — романтика на улице или в помещении\n"
             "• Мероприятия — вечеринки, события\n"
-            "• Свадьбы — полный день, полдня, только прогулка, только ЗАГС\n"
+            "• Свадьбы — полный день, полдня, только прогулка, только ЗАГС"
         )
         await message.answer(types_text, reply_markup=main_menu())
         return
@@ -124,7 +122,7 @@ async def generic_handler(message: types.Message):
             "• Детская: 40 фото, 4 дня\n"
             "• Love Story: 50 фото, 5 дней\n"
             "• Мероприятия: 100 фото, 7 дней\n"
-            "• Свадьбы: 200 фото полный день — 10 дней, полдня — 6 дней\n"
+            "• Свадьбы: 200 фото полный день — 10 дней, полдня — 6 дней"
         )
         await message.answer(deadlines_text, reply_markup=main_menu())
         return
@@ -149,8 +147,7 @@ async def generic_handler(message: types.Message):
                 logger.exception("Не удалось отправить заявку фотографу")
         return
 
-    # --- fallback ---
-    # если пользователь написал что-то не из меню
+    # --- fallback: любое другое сообщение ---
     if PHOTOGRAPHER_CHAT_ID:
         try:
             await bot.send_message(
@@ -172,7 +169,7 @@ async def generic_handler(message: types.Message):
 # ------------- WEBHOOK server (aiohttp) -------------
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.getenv("PORT", "10000"))  # Render задаёт PORT автоматически
+WEBAPP_PORT = int(os.getenv("PORT", "10000"))
 
 async def handle_webhook(request: web.Request):
     try:
