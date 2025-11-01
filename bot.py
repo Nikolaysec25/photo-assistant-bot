@@ -1,155 +1,156 @@
 import logging
-import asyncio
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiohttp import web
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
+import asyncio
 import os
 
 logging.basicConfig(level=logging.INFO)
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+logger = logging.getLogger(__name__)
 
-# ⚠️ Укажи свой Telegram ID, чтобы получать уведомления о клиентах
-ADMIN_ID = 1054983240
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PHOTOGRAPHER_CHAT_ID = os.getenv("PHOTOGRAPHER_CHAT_ID")  # вставь свой Telegram ID сюда
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ===============================
-# Сценарии диалога
-# ===============================
+# --- Главное меню ---
+def main_menu():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="💰 Узнать цены")],
+            [KeyboardButton(text="📸 Виды съёмок")],
+            [KeyboardButton(text="📅 Проверить свободные даты")],
+            [KeyboardButton(text="⏳ Сроки и обработка")],
+            [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")]
+        ],
+        resize_keyboard=True
+    )
+
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("💰 Узнать цену", "📸 Виды съёмок")
     await message.answer(
-        f"Здравствуйте, {name}! 👋\n"
-        "Я ассистент фотографа.\n\n"
-        "Помогу быстро узнать нужную информацию — просто выберите, что вас интересует 👇",
-        reply_markup=keyboard
+        f"Привет, {name}! 👋\n"
+        "Я ассистент фотографа 🌿\n"
+        "Помогу рассказать про цены, даты и формат съёмки.\n\n"
+        "Выберите интересующий пункт ниже 👇",
+        reply_markup=main_menu()
     )
 
-# ---------- Этап 1: Цена ----------
-@dp.message(lambda m: m.text in ["💰 Узнать цену", "цена", "стоимость"])
-async def ask_type(message: types.Message):
+
+# --- Ответы на частые вопросы ---
+@dp.message(F.text == "💰 Узнать цены")
+async def show_prices(message: types.Message):
     name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("👤 Индивидуальная", "👨‍👩‍👧 Семейная", "💞 Love Story", "🎉 Мероприятие")
     await message.answer(
-        f"{name}, выберите тип съёмки, чтобы я показал стоимость 👇",
-        reply_markup=keyboard
+        f"{name}, вот базовые цены на фотосессии 💵:\n\n"
+        "• Индивидуальная — от 120 BYN\n"
+        "• Семейная — от 150 BYN\n"
+        "• Love Story — от 130 BYN\n"
+        "• Детская — от 100 BYN\n"
+        "• Мероприятия — по договорённости\n\n"
+        "Хотите уточнить детали или записаться?",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="📸 Хочу уточнить вид съёмки")],
+                [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")],
+                [KeyboardButton(text="🔙 Назад")]
+            ],
+            resize_keyboard=True
+        )
     )
 
-@dp.message(lambda m: m.text in ["👤 Индивидуальная", "👨‍👩‍👧 Семейная", "💞 Love Story", "🎉 Мероприятие"])
-async def show_price(message: types.Message):
-    name = message.from_user.first_name or "друг"
-    text = message.text
-    prices = {
-        "👤 Индивидуальная": "💰 Индивидуальная фотосессия — от 120 BYN (1 час, до 60 фото).",
-        "👨‍👩‍👧 Семейная": "👨‍👩‍👧 Семейная съёмка — от 150 BYN (до 1.5 часов, 70 фото).",
-        "💞 Love Story": "💞 Love Story — от 180 BYN (1.5 часа, 60–80 фото).",
-        "🎉 Мероприятие": "🎉 Съёмка мероприятий — от 200 BYN (2 часа и более)."
-    }
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("📅 Узнать свободные даты", "📍 Где проходят съёмки")
+
+@dp.message(F.text == "📸 Виды съёмок")
+async def show_types(message: types.Message):
     await message.answer(
-        f"{name}, {prices[text]}\n\nХотите узнать свободные даты или место съёмки?",
-        reply_markup=keyboard
+        "Провожу разные виды съёмок 📷:\n"
+        "• Индивидуальная\n• Семейная\n• Детская\n• Love Story\n• Контент / Мероприятия\n\n"
+        "Вы можете уточнить цену или доступные даты 👇",
+        reply_markup=main_menu()
     )
 
-# ---------- Этап 2: Даты ----------
-@dp.message(lambda m: m.text in ["📅 Узнать свободные даты", "дата", "свободные даты"])
-async def ask_date(message: types.Message):
-    name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("📆 В ближайшие выходные", "📆 На следующей неделе", "📆 В другой день")
+
+@dp.message(F.text == "📅 Проверить свободные даты")
+async def show_dates(message: types.Message):
     await message.answer(
-        f"{name}, когда вы планируете съёмку?",
-        reply_markup=keyboard
+        "Свободные даты быстро меняются 🗓️\n"
+        "Напишите, пожалуйста, месяц и примерный день, и я проверю наличие.",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="📞 Хочу, чтобы со мной связались")],
+                [KeyboardButton(text="🔙 Назад")]
+            ],
+            resize_keyboard=True
+        )
     )
 
-@dp.message(lambda m: m.text.startswith("📆"))
-async def show_date_info(message: types.Message):
-    name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("✅ Хочу записаться", "❌ Пока думаю")
+
+@dp.message(F.text == "⏳ Сроки и обработка")
+async def show_deadlines(message: types.Message):
     await message.answer(
-        f"{name}, отлично! Эти даты сейчас ещё доступны 📅\n"
-        "Хотите, чтобы фотограф связался с вами для брони?",
-        reply_markup=keyboard
+        "⏱️ Обычно фотографии готовы через 7–14 дней.\n"
+        "Количество обработанных снимков зависит от выбранного пакета (в среднем 40–80 фото).\n\n"
+        "Хотите узнать точнее для своего случая?",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="💰 Узнать цены")],
+                [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")],
+                [KeyboardButton(text="🔙 Назад")]
+            ],
+            resize_keyboard=True
+        )
     )
 
-# ---------- Этап 3: Место ----------
-@dp.message(lambda m: m.text in ["📍 Где проходят съёмки", "место", "локация"])
-async def show_location(message: types.Message):
-    name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("🏢 В студии", "🌿 На улице", "🏠 На выезде")
-    await message.answer(
-        f"{name}, съёмки проходят в студии, на улице или на выезде. Что вам подходит?",
-        reply_markup=keyboard
-    )
 
-@dp.message(lambda m: m.text in ["🏢 В студии", "🌿 На улице", "🏠 На выезде"])
-async def location_selected(message: types.Message):
-    name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("✅ Хочу записаться", "❌ Пока думаю")
-    await message.answer(
-        f"{name}, отлично! 📸 Это отличное место для фото.\n"
-        "Хотите, чтобы фотограф связался с вами лично?",
-        reply_markup=keyboard
-    )
+@dp.message(F.text == "🔙 Назад")
+async def go_back(message: types.Message):
+    await message.answer("Вы вернулись в главное меню 👇", reply_markup=main_menu())
 
-# ---------- Этап 4: Заявка ----------
-@dp.message(lambda m: m.text == "✅ Хочу записаться")
+
+# --- Когда клиент хочет, чтобы с ним связались ---
+@dp.message(F.text == "☎️ Хочу, чтобы со мной связались")
 async def contact_request(message: types.Message):
-    user = message.from_user
-    name = user.first_name or "Клиент"
+    name = message.from_user.first_name or "клиент"
+    username = message.from_user.username or "без username"
+    user_id = message.from_user.id
+
     await message.answer(
-        f"Спасибо, {name}! 🙌 Я передал фотографу, что вы хотите записаться.\n"
-        "Он свяжется с вами в ближайшее время!"
+        f"Спасибо, {name}! 😊\n"
+        "Я передам фотографу, чтобы он связался с вами в ближайшее время.\n\n"
+        "Вы можете пока посмотреть другие варианты 👇",
+        reply_markup=main_menu()
     )
 
-    msg_to_admin = (
-        f"📞 Новый клиент хочет записаться!\n\n"
-        f"Имя: {user.full_name}\n"
-        f"Username: @{user.username if user.username else '—'}\n"
-        f"ID: {user.id}"
-    )
-    try:
-        await bot.send_message(ADMIN_ID, msg_to_admin)
-    except Exception as e:
-        logging.warning(f"Ошибка при отправке уведомления фотографу: {e}")
+    # Отправляем уведомление фотографу
+    if PHOTOGRAPHER_CHAT_ID:
+        await bot.send_message(
+            PHOTOGRAPHER_CHAT_ID,
+            f"📞 Новый запрос от клиента:\n"
+            f"Имя: {name}\n"
+            f"Username: @{username}\n"
+            f"ID: {user_id}\n"
+            f"Просит связаться!"
+        )
 
-@dp.message(lambda m: m.text == "❌ Пока думаю")
-async def contact_decline(message: types.Message):
+
+@dp.message()
+async def fallback(message: types.Message):
     name = message.from_user.first_name or "друг"
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add("💰 Узнать цену", "📅 Узнать даты", "📍 Где проходят съёмки")
     await message.answer(
-        f"Хорошо, {name} 🌿 Если что — я всегда рядом. Можете вернуться к любому вопросу 👇",
-        reply_markup=keyboard
+        f"{name}, я ассистент фотографа 🌿\n"
+        "Выберите пункт из меню ниже, чтобы я мог помочь 👇",
+        reply_markup=main_menu()
     )
 
-# ---------- Render web ----------
-async def handle(request):
-    return web.Response(text="Bot is running!")
-
-async def web_server():
-    app = web.Application()
-    app.add_routes([web.get("/", handle)])
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 10000)
-    await site.start()
 
 async def main():
-    bot_task = asyncio.create_task(dp.start_polling(bot))
-    web_task = asyncio.create_task(web_server())
-    await asyncio.gather(bot_task, web_task)
+    logger.info("🚀 Бот запущен и готов к работе!")
+    await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
-    logging.info("🚀 Запуск бота с веб-сервером...")
     asyncio.run(main())
