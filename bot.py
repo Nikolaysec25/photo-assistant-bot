@@ -1,169 +1,212 @@
-import logging
+# bot.py — webhook-ready для Render
 import os
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+import logging
+import asyncio
 from aiohttp import web
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-SERVICE_URL = os.getenv("SERVICE_URL")
-PHOTOGRAPHER_ID = 1054983240  # ID куда будут отправляться заявки (замени на свой chat_id)
-
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()  # <--- исправлено
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Главная клавиатура
-main_kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="💰 Узнать цены")],
-        [KeyboardButton(text="📸 Виды съёмок")],
-        [KeyboardButton(text="📅 Проверить свободные даты")],
-        [KeyboardButton(text="⏳ Сроки и обработка")],
-        [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")]
-    ],
-    resize_keyboard=True
-)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PHOTOGRAPHER_CHAT_ID = os.getenv("PHOTOGRAPHER_CHAT_ID")  # строка, например "123456789"
 
-# Хранилище заявок
-user_requests = {}
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN не задан в Environment")
 
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+dp = Dispatcher()
 
-@dp.message_handler(commands=["start"])
-async def start_cmd(message: types.Message):
+# --- Для хранения состояния новых пользователей (можно заменить на базу) ---
+seen_users = set()
+
+# --- клавиатура главного меню ---
+def main_menu():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="💰 Узнать цены")],
+            [KeyboardButton(text="📸 Виды съёмок")],
+            [KeyboardButton(text="📅 Проверить свободные даты")],
+            [KeyboardButton(text="⏳ Сроки и обработка")],
+            [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")]
+        ],
+        resize_keyboard=True
+    )
+
+# --- приветствие пользователя только один раз ---
+@dp.message(Command("start"))
+async def start_command(message: types.Message):
+    user_id = message.from_user.id
     name = message.from_user.first_name or "друг"
-    text = (
-        f"Привет, {name}! 🌿\n\n"
-        f"Я Юля — ассистент фотографа 📸\n"
-        f"Помогаю с выбором съёмки, расскажу про цены, сроки и помогу записаться.\n\n"
-        f"Выберите пункт меню ниже 👇\n"
-        f"Если у вас есть другой вопрос — просто напишите его, "
-        f"и я передам Юле лично ❤️"
-    )
-    await message.answer(text, reply_markup=main_kb)
 
-
-@dp.message_handler(lambda msg: msg.text == "💰 Узнать цены")
-async def prices(msg: types.Message):
-    text = (
-        "💰 <b>Цены на фотосессии:</b>\n\n"
-        "📷 <b>Индивидуальная</b> — от 120 BYN (1 час)\n"
-        "👨‍👩‍👧 <b>Семейная</b> — от 150 BYN (1.5 часа)\n"
-        "👶 <b>Детская</b> — от 130 BYN\n"
-        "💞 <b>Love Story</b> — от 160 BYN\n"
-        "🌇 <b>На улице / в помещении</b> — по выбору клиента\n"
-        "🎉 <b>Мероприятия</b> — от 200 BYN (2 часа)\n"
-        "💍 <b>Свадьба</b>:\n"
-        "   • Только прогулка — от 250 BYN\n"
-        "   • ЗАГС + прогулка — от 300 BYN\n"
-        "   • Полдня — от 400 BYN\n"
-        "   • Весь день — от 600 BYN\n\n"
-        "📞 Все пакеты можно обсудить индивидуально ❤️"
-    )
-    await msg.answer(text, parse_mode="HTML")
-
-
-@dp.message_handler(lambda msg: msg.text == "📸 Виды съёмок")
-async def kinds(msg: types.Message):
-    text = (
-        "📸 <b>Виды фотосессий:</b>\n\n"
-        "✨ Индивидуальная — студия, улица, интерьер.\n"
-        "👨‍👩‍👧 Семейная — уютные кадры дома или на природе.\n"
-        "👶 Детская — нежно, безопасно, с вниманием к деталям.\n"
-        "💞 Love Story — история вашей любви, прогулка или студия.\n"
-        "🎉 Мероприятия — крестины, дни рождения, корпоративы.\n"
-        "💍 Свадьбы — от ЗАГСа до полного дня!\n\n"
-        "🌿 Можем подобрать стиль под вас — классика, lifestyle, контент для Instagram."
-    )
-    await msg.answer(text, parse_mode="HTML")
-
-
-@dp.message_handler(lambda msg: msg.text == "📅 Проверить свободные даты")
-async def dates(msg: types.Message):
-    await msg.answer(
-        "📅 Напишите, пожалуйста, желаемую дату или диапазон (например, «15 ноября» или «20–25 ноября»). "
-        "Я передам Юле, чтобы уточнила наличие 🌿"
-    )
-
-
-@dp.message_handler(lambda msg: msg.text == "⏳ Сроки и обработка")
-async def timing(msg: types.Message):
-    text = (
-        "⏳ <b>Сроки и количество фото:</b>\n\n"
-        "📷 Индивидуальная — 50 фото, готово через 7–10 дней.\n"
-        "👨‍👩‍👧 Семейная — 70 фото, 10–12 дней.\n"
-        "👶 Детская — 50 фото, 10 дней.\n"
-        "💞 Love Story — 80 фото, 10–14 дней.\n"
-        "🎉 Мероприятие — 100+ фото, 14 дней.\n"
-        "💍 Свадьба — 300–600 фото, 3–4 недели.\n\n"
-        "🖼 Все фото проходят цветокоррекцию, 10 лучших — художественная ретушь ✨"
-    )
-    await msg.answer(text, parse_mode="HTML")
-
-
-@dp.message_handler(lambda msg: msg.text == "☎️ Хочу, чтобы со мной связались")
-async def contact_request(msg: types.Message):
-    user_id = msg.from_user.id
-    user_data = user_requests.get(user_id, {})
-    name = msg.from_user.full_name
-    username = msg.from_user.username
-    date_request = user_data.get("date")
-    question = user_data.get("question")
-
-    text_to_photographer = (
-        f"📞 Новый клиент хочет связаться!\n\n"
-        f"👤 Имя: {name}\n"
-        f"@{username if username else 'без username'}\n"
-        f"📅 Дата съёмки: {date_request or 'не указана'}\n"
-        f"💬 Вопрос: {question or 'не было'}"
-    )
-
-    await bot.send_message(PHOTOGRAPHER_ID, text_to_photographer)
-    await msg.answer("Спасибо 🌸 Юля свяжется с вами в ближайшее время!")
-
-
-@dp.message_handler()
-async def catch_all(msg: types.Message):
-    user_id = msg.from_user.id
-    text = msg.text
-
-    # если человек писал дату
-    if any(month in text.lower() for month in ["январ", "феврал", "март", "апрел", "май", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр"]):
-        user_requests[user_id] = user_requests.get(user_id, {})
-        user_requests[user_id]["date"] = text
-        await msg.answer("📅 Я записала дату и передам Юле. Если хотите, чтобы она перезвонила — выберите пункт ☎️")
+    if user_id not in seen_users:
+        seen_users.add(user_id)
+        await message.answer(
+            f"Привет, {name}! 👋\n"
+            "Меня зовут Юля — я помощник фотографа 🌿.\n"
+            "Выберите пункт ниже 👇"
+            "\nЕсли у вас есть вопрос, которого нет в меню, напишите его, и я передам фотографу.",
+            reply_markup=main_menu()
+        )
     else:
-        user_requests[user_id] = user_requests.get(user_id, {})
-        user_requests[user_id]["question"] = text
-        await msg.answer("✍️ Ваш вопрос записан. Юля обязательно ознакомится! Чтобы связаться — нажмите ☎️")
+        await message.answer(
+            f"С возвращением, {name}! 🌸\nВыберите пункт меню ниже 👇",
+            reply_markup=main_menu()
+        )
+
+# --- обработчик всех сообщений ---
+@dp.message()
+async def generic_handler(message: types.Message):
+    text = (message.text or "").lower()
+    name = message.from_user.first_name or "друг"
+    user_id = message.from_user.id
+
+    # --- Цены ---
+    if "💰" in text or "цена" in text or "узнать цены" in text:
+        prices_text = (
+            "💰 <b>Цены на съёмки</b>:\n\n"
+            "• Индивидуальная: 120 BYN/час\n"
+            "• Семейная: 150 BYN/час\n"
+            "• Детская: 100 BYN/час\n"
+            "• Love story (улица / интерьер): 120 BYN/час\n"
+            "• Мероприятия: от 200 BYN/час\n"
+            "• Свадьбы: час — 150 BYN, день — 350 BYN, полдня — 200 BYN\n"
+            "• Только прогулка — 100 BYN\n"
+            "• Только ЗАГС — 80 BYN\n"
+        )
+        await message.answer(prices_text, reply_markup=main_menu())
+        return
+
+    # --- Виды съёмок ---
+    if "📸" in text or "вид" in text or "съёмк" in text:
+        types_text = (
+            "📸 <b>Виды съёмок</b>:\n\n"
+            "• Индивидуальная — стильные портреты, outdoor/indoor\n"
+            "• Семейная — уютные фото всей семьи\n"
+            "• Детская — яркие и живые моменты\n"
+            "• Love Story — романтика на улице или в помещении\n"
+            "• Мероприятия — вечеринки, события\n"
+            "• Свадьбы — полный день, полдня, только прогулка, только ЗАГС\n"
+        )
+        await message.answer(types_text, reply_markup=main_menu())
+        return
+
+    # --- Проверка свободных дат ---
+    if "📅" in text or "дата" in text or "свободн" in text:
+        await message.answer(
+            f"{name}, напишите, пожалуйста, дату или период, который вас интересует.\n"
+            "Я передам фотографу, и он свяжется с вами.",
+            reply_markup=main_menu()
+        )
+        # сохраняем дату для последующей передачи
+        if PHOTOGRAPHER_CHAT_ID:
+            try:
+                await bot.send_message(
+                    PHOTOGRAPHER_CHAT_ID,
+                    f"📅 <b>Запрос на дату</b>\n\n"
+                    f"Имя: {message.from_user.full_name}\n"
+                    f"Username: @{message.from_user.username or '—'}\n"
+                    f"ID: {message.from_user.id}\n"
+                    f"Запрошенная дата: {message.text}"
+                )
+            except Exception as e:
+                logger.exception("Не удалось отправить дату фотографу")
+        return
+
+    # --- Сроки и обработка ---
+    if "⏳" in text or "срок" in text or "обработк" in text:
+        deadlines_text = (
+            "⏳ <b>Сроки и обработка</b>:\n\n"
+            "• Индивидуальная: 50 фото, 5 дней\n"
+            "• Семейная: 60 фото, 6 дней\n"
+            "• Детская: 40 фото, 4 дня\n"
+            "• Love Story: 50 фото, 5 дней\n"
+            "• Мероприятия: 100 фото, 7 дней\n"
+            "• Свадьбы: 200 фото полный день — 10 дней, полдня — 6 дней\n"
+        )
+        await message.answer(deadlines_text, reply_markup=main_menu())
+        return
+
+    # --- Обратный звонок ---
+    if "☎️" in text or "хочу, чтобы со мной связались" in text:
+        await message.answer(
+            f"Спасибо, {name}! Я передал фотографу вашу заявку. Он свяжется с вами.",
+            reply_markup=main_menu()
+        )
+        if PHOTOGRAPHER_CHAT_ID:
+            try:
+                await bot.send_message(
+                    PHOTOGRAPHER_CHAT_ID,
+                    f"📞 <b>Новый запрос на обратный звонок</b>\n\n"
+                    f"Имя: {message.from_user.full_name}\n"
+                    f"Username: @{message.from_user.username or '—'}\n"
+                    f"ID: {message.from_user.id}\n"
+                    f"Доп. вопрос клиента: {message.text}"
+                )
+            except Exception as e:
+                logger.exception("Не удалось отправить заявку фотографу")
+        return
+
+    # --- fallback ---
+    # если пользователь написал что-то не из меню
+    if PHOTOGRAPHER_CHAT_ID:
+        try:
+            await bot.send_message(
+                PHOTOGRAPHER_CHAT_ID,
+                f"❓ <b>Вопрос клиента</b>\n\n"
+                f"Имя: {message.from_user.full_name}\n"
+                f"Username: @{message.from_user.username or '—'}\n"
+                f"ID: {message.from_user.id}\n"
+                f"Вопрос: {message.text}"
+            )
+        except Exception as e:
+            logger.exception("Не удалось отправить вопрос фотографу")
+    await message.answer(
+        f"{name}, спасибо за сообщение! Оно передано фотографу. Пожалуйста, выберите пункт меню ниже 👇",
+        reply_markup=main_menu()
+    )
 
 
-# ---- WEBHOOK НА RENDER ----
-async def handle_webhook(request):
-    data = await request.json()
+# ------------- WEBHOOK server (aiohttp) -------------
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBAPP_HOST = "0.0.0.0"
+WEBAPP_PORT = int(os.getenv("PORT", "10000"))  # Render задаёт PORT автоматически
+
+async def handle_webhook(request: web.Request):
+    try:
+        data = await request.json()
+    except Exception:
+        return web.Response(status=400, text="no json")
     update = types.Update(**data)
-    await dp.process_update(update)
-    return web.Response()
+    await dp.feed_update(bot, update)
+    return web.Response(text="ok")
 
-async def on_startup(app):
+async def on_startup(app: web.Application):
+    SERVICE_URL = os.getenv("SERVICE_URL")  # https://your-service.onrender.com
     if SERVICE_URL:
-        webhook_url = f"{SERVICE_URL}/webhook/{BOT_TOKEN}"
+        webhook_url = SERVICE_URL.rstrip("/") + WEBHOOK_PATH
+        logger.info(f"Setting webhook: {webhook_url}")
         await bot.set_webhook(webhook_url)
-        logger.info(f"Webhook установлен: {webhook_url}")
     else:
-        logger.warning("SERVICE_URL не задан — webhook не установлен!")
+        logger.warning("SERVICE_URL не задан — webhook не будет установлен автоматически.")
 
-async def on_shutdown(app):
-    logger.info("Удаление webhook...")
-    await bot.delete_webhook()
+async def on_shutdown(app: web.Application):
+    logger.info("Shutdown: removing webhook")
+    try:
+        await bot.delete_webhook()
+    except Exception:
+        pass
+    await bot.session.close()
 
-def main():
+def run_webapp():
     app = web.Application()
-    app.router.add_post(f"/webhook/{BOT_TOKEN}", handle_webhook)
+    app.router.add_post(WEBHOOK_PATH, handle_webhook)
     app.on_startup.append(on_startup)
-    app.on_shutdown.append(on_shutdown)
-    web.run_app(app, port=10000)
+    app.on_cleanup.append(on_shutdown)
+    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
 
 if __name__ == "__main__":
-    main()
+    logger.info("Starting webhook server...")
+    run_webapp()
