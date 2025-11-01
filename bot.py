@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # ⚠️ Замени на свой Telegram ID (узнай у @userinfobot)
-ADMIN_ID = 123456789
+ADMIN_ID = 1054983240
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
