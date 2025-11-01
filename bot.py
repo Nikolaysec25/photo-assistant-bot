@@ -1,35 +1,38 @@
-# bot.py
-import os
 import asyncio
+import logging
+import os
+
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart
 
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    raise SystemExit("Нужна переменная окружения BOT_TOKEN")
+# Включаем логи (чтобы видеть вывод на Render)
+logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=TOKEN)
+# Получаем токен из переменной окружения (Render -> Environment)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+# Проверка на случай, если токен не найден
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN не найден. Добавь его в Render Environment!")
+
+# Создаем объекты бота и диспетчера
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-@dp.message(commands=["start"])
-async def cmd_start(event: types.Message):
-    await event.reply("Привет! Я — помощник фотографа. Напиши 'цены' или 'запись'.")
+# Обработчик команды /start
+@dp.message(CommandStart())
+async def send_welcome(message: types.Message):
+    await message.answer("Привет 👋! Я помощник фотографа. Чем могу помочь?")
 
+# Обработчик любого другого текста
 @dp.message()
-async def all_messages(message: types.Message):
-    text = message.text.lower()
-    if "цены" in text:
-        await message.reply("Цены: Мини-съёмка — 80 BYN/час. Полная информация по запросу.")
-    elif "запись" in text or "дата" in text:
-        await message.reply("Напиши желаемую дату в формате DD.MM.YYYY, я проверю свободные окна.")
-    else:
-        await message.reply("Могу помочь с ценами, записью и организацией съёмки.")
+async def echo_message(message: types.Message):
+    await message.answer("Спасибо за сообщение! Скоро я научусь отвечать умнее 😊")
 
+# Основная функция запуска
 async def main():
-    try:
-        print("Запуск бота...")
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
+    logging.info("🚀 Запуск бота...")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
