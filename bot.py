@@ -1,128 +1,170 @@
-# bot.py — webhook-ready для Render
-import os
 import logging
-import asyncio
-from aiohttp import web
+import os
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiohttp import web
+
+# Настройки
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+SERVICE_URL = os.getenv("SERVICE_URL")
+PHOTOGRAPHER_ID = 8258768183  # ID куда будут отправляться заявки (замени на свой chat_id, если нужно)
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-PHOTOGRAPHER_CHAT_ID = os.getenv("PHOTOGRAPHER_CHAT_ID")  # строка, например "123456789"
+# Главная клавиатура
+main_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="💰 Узнать цены")],
+        [KeyboardButton(text="📸 Виды съёмок")],
+        [KeyboardButton(text="📅 Проверить свободные даты")],
+        [KeyboardButton(text="⏳ Сроки и обработка")],
+        [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")]
+    ],
+    resize_keyboard=True
+)
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN не задан в Environment")
+# Хранилище заявок
+user_requests = {}
 
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
-dp = Dispatcher()
 
-# --- клавиатура главного меню ---
-def main_menu():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="💰 Узнать цены")],
-            [KeyboardButton(text="📸 Виды съёмок")],
-            [KeyboardButton(text="📅 Проверить свободные даты")],
-            [KeyboardButton(text="⏳ Сроки и обработка")],
-            [KeyboardButton(text="☎️ Хочу, чтобы со мной связались")]
-        ],
-        resize_keyboard=True
+@dp.message_handler(commands=["start"])
+async def start_cmd(message: types.Message):
+    name = message.from_user.first_name or "друг"
+    text = (
+        f"Привет, {name}! 🌿\n\n"
+        f"Я Юля — ассистент фотографа 📸\n"
+        f"Помогаю с выбором съёмки, расскажу про цены, сроки и помогу записаться.\n\n"
+        f"Выберите пункт меню ниже 👇\n"
+        f"Если у вас есть другой вопрос — просто напишите его, "
+        f"и я передам Юле лично ❤️"
+    )
+    await message.answer(text, reply_markup=main_kb)
+
+
+@dp.message_handler(lambda msg: msg.text == "💰 Узнать цены")
+async def prices(msg: types.Message):
+    text = (
+        "💰 <b>Цены на фотосессии:</b>\n\n"
+        "📷 <b>Индивидуальная</b> — от 120 BYN (1 час)\n"
+        "👨‍👩‍👧 <b>Семейная</b> — от 150 BYN (1.5 часа)\n"
+        "👶 <b>Детская</b> — от 130 BYN\n"
+        "💞 <b>Love Story</b> — от 160 BYN\n"
+        "🌇 <b>На улице / в помещении</b> — по выбору клиента\n"
+        "🎉 <b>Мероприятия</b> — от 200 BYN (2 часа)\n"
+        "💍 <b>Свадьба</b>:\n"
+        "   • Только прогулка — от 250 BYN\n"
+        "   • ЗАГС + прогулка — от 300 BYN\n"
+        "   • Полдня — от 400 BYN\n"
+        "   • Весь день — от 600 BYN\n\n"
+        "📞 Все пакеты можно обсудить индивидуально ❤️"
+    )
+    await msg.answer(text, parse_mode="HTML")
+
+
+@dp.message_handler(lambda msg: msg.text == "📸 Виды съёмок")
+async def kinds(msg: types.Message):
+    text = (
+        "📸 <b>Виды фотосессий:</b>\n\n"
+        "✨ Индивидуальная — студия, улица, интерьер.\n"
+        "👨‍👩‍👧 Семейная — уютные кадры дома или на природе.\n"
+        "👶 Детская — нежно, безопасно, с вниманием к деталям.\n"
+        "💞 Love Story — история вашей любви, прогулка или студия.\n"
+        "🎉 Мероприятия — крестины, дни рождения, корпоративы.\n"
+        "💍 Свадьбы — от ЗАГСа до полного дня!\n\n"
+        "🌿 Можем подобрать стиль под вас — классика, lifestyle, контент для Instagram."
+    )
+    await msg.answer(text, parse_mode="HTML")
+
+
+@dp.message_handler(lambda msg: msg.text == "📅 Проверить свободные даты")
+async def dates(msg: types.Message):
+    await msg.answer(
+        "📅 Напишите, пожалуйста, желаемую дату или диапазон (например, «15 ноября» или «20–25 ноября»). "
+        "Я передам Юле, чтобы уточнила наличие 🌿"
     )
 
-@dp.message(Command("start"))
-async def start_command(message: types.Message):
-    name = message.from_user.first_name or "друг"
-    await message.answer(
-        f"Привет, {name}! 👋\n"
-        "Я ассистент фотографа 🌿\n"
-        "Выберите пункт ниже 👇",
-        reply_markup=main_menu()
+
+@dp.message_handler(lambda msg: msg.text == "⏳ Сроки и обработка")
+async def timing(msg: types.Message):
+    text = (
+        "⏳ <b>Сроки и количество фото:</b>\n\n"
+        "📷 Индивидуальная — 50 фото, готово через 7–10 дней.\n"
+        "👨‍👩‍👧 Семейная — 70 фото, 10–12 дней.\n"
+        "👶 Детская — 50 фото, 10 дней.\n"
+        "💞 Love Story — 80 фото, 10–14 дней.\n"
+        "🎉 Мероприятие — 100+ фото, 14 дней.\n"
+        "💍 Свадьба — 300–600 фото, 3–4 недели.\n\n"
+        "🖼 Все фото проходят цветокоррекцию, 10 лучших — художественная ретушь ✨"
+    )
+    await msg.answer(text, parse_mode="HTML")
+
+
+@dp.message_handler(lambda msg: msg.text == "☎️ Хочу, чтобы со мной связались")
+async def contact_request(msg: types.Message):
+    user_id = msg.from_user.id
+    user_data = user_requests.get(user_id, {})
+    name = msg.from_user.full_name
+    username = msg.from_user.username
+    date_request = user_data.get("date")
+    question = user_data.get("question")
+
+    text_to_photographer = (
+        f"📞 Новый клиент хочет связаться!\n\n"
+        f"👤 Имя: {name}\n"
+        f"@{username if username else 'без username'}\n"
+        f"📅 Дата съёмки: {date_request or 'не указана'}\n"
+        f"💬 Вопрос: {question or 'не было'}"
     )
 
-@dp.message()
-async def generic_handler(message: types.Message):
-    text = (message.text or "").lower()
-    name = message.from_user.first_name or "друг"
-
-    # простая логика ответов — расширяй по ключам
-    if "цена" in text or "узнать цены" in text or "стоимость" in text:
-        await message.answer(f"{name}, базовые цены:\n• Индивид — от 120 BYN\n• Семья — от 150 BYN\n\nЕсли хотите — нажмите «☎️ Хочу, чтобы со мной связались»", reply_markup=main_menu())
-        return
-    if "вид" in text or "види" in text or "съёмк" in text:
-        await message.answer(f"{name}, провожу: индивидуальная, семейная, детская, love story, мероприятия.\n\nМогу проверить даты или зарезервировать.", reply_markup=main_menu())
-        return
-    if "дата" in text or "свободн" in text:
-        await message.answer(f"{name}, напишите, пожалуйста, примерный день/период (например «14 ноября»), и я проверю.", reply_markup=main_menu())
-        return
-
-    # кнопки: если пользователь нажал кнопку "☎️ Хочу, чтобы со мной связались"
-    if text == "☎️ хочу, чтобы со мной связались" or text == "хочу, чтобы со мной связались":
-        await message.answer(f"Спасибо, {name}! Я передал фотографу вашу заявку. Он свяжется с вами.", reply_markup=main_menu())
-        # уведомление фотографу
-        if PHOTOGRAPHER_CHAT_ID:
-            try:
-                await bot.send_message(
-                    PHOTOGRAPHER_CHAT_ID,
-                    f"📞 <b>Новый запрос на обратный звонок</b>\n\n"
-                    f"Имя: {message.from_user.full_name}\n"
-                    f"Username: @{message.from_user.username or '—'}\n"
-                    f"ID: {message.from_user.id}\n"
-                    f"Сообщение: {message.text}"
-                )
-            except Exception as e:
-                logger.exception("Не удалось отправить уведомление фотографу")
-        return
-
-    # fallback
-    await message.answer(f"{name}, выберите пункт меню или напишите ваш вопрос.", reply_markup=main_menu())
+    await bot.send_message(PHOTOGRAPHER_ID, text_to_photographer)
+    await msg.answer("Спасибо 🌸 Юля свяжется с вами в ближайшее время!")
 
 
-# ------------- WEBHOOK server (aiohttp) -------------
-# Path для webhook: /webhook/<token>
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
-WEBAPP_HOST = "0.0.0.0"
-WEBAPP_PORT = int(os.getenv("PORT", "10000"))  # Render задаёт PORT автоматически
+@dp.message_handler()
+async def catch_all(msg: types.Message):
+    user_id = msg.from_user.id
+    text = msg.text
 
-async def handle_webhook(request: web.Request):
-    # Telegram присылает JSON — прокинем в aiogram
-    try:
-        data = await request.json()
-    except Exception:
-        return web.Response(status=400, text="no json")
-
-    update = types.Update(**data)
-    await dp.feed_update(bot, update)
-    return web.Response(text="ok")
-
-async def on_startup(app: web.Application):
-    # Set webhook to Render URL
-    # Получаем PRIMARY URL из переменной окружения (RENDER задаёт не всегда), или формируем из переменной, попросим пользователя вставить SERVICE_URL
-    SERVICE_URL = os.getenv("SERVICE_URL")  # обязательно установи: https://your-service.onrender.com
-    if not SERVICE_URL:
-        logger.warning("SERVICE_URL не задан — webhook не будет установлен автоматически. Установи SERVICE_URL в Environment (https://your-service.onrender.com)")
+    # если человек писал дату
+    if any(month in text.lower() for month in ["январ", "феврал", "март", "апрел", "май", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр"]):
+        user_requests[user_id] = user_requests.get(user_id, {})
+        user_requests[user_id]["date"] = text
+        await msg.answer("📅 Я записала дату и передам Юле. Если хотите, чтобы она перезвонила — выберите пункт ☎️")
     else:
-        webhook_url = SERVICE_URL.rstrip("/") + WEBHOOK_PATH
-        logger.info(f"Setting webhook: {webhook_url}")
+        user_requests[user_id] = user_requests.get(user_id, {})
+        user_requests[user_id]["question"] = text
+        await msg.answer("✍️ Ваш вопрос записан. Юля обязательно ознакомится! Чтобы связаться — нажмите ☎️")
+
+
+# ---- WEBHOOK НА RENDER ----
+async def handle_webhook(request):
+    data = await request.json()
+    update = types.Update(**data)
+    await dp.process_update(update)
+    return web.Response()
+
+async def on_startup(app):
+    if SERVICE_URL:
+        webhook_url = f"{SERVICE_URL}/webhook/{BOT_TOKEN}"
         await bot.set_webhook(webhook_url)
+        logger.info(f"Webhook установлен: {webhook_url}")
+    else:
+        logger.warning("SERVICE_URL не задан — webhook не установлен!")
 
-async def on_shutdown(app: web.Application):
-    logger.info("Shutdown: removing webhook")
-    try:
-        await bot.delete_webhook()
-    except Exception:
-        pass
-    await bot.session.close()
+async def on_shutdown(app):
+    logger.info("Удаление webhook...")
+    await bot.delete_webhook()
 
-def run_webapp():
+def main():
     app = web.Application()
-    app.router.add_post(WEBHOOK_PATH, handle_webhook)
+    app.router.add_post(f"/webhook/{BOT_TOKEN}", handle_webhook)
     app.on_startup.append(on_startup)
-    app.on_cleanup.append(on_shutdown)
-    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
+    app.on_shutdown.append(on_shutdown)
+    web.run_app(app, port=10000)
 
 if __name__ == "__main__":
-    logger.info("Starting webhook server...")
-    run_webapp()
+    main()
